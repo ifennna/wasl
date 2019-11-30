@@ -358,8 +358,14 @@ pub fn scan_into_peekable(source: String) -> Result<IntoIter<Token>, ScanError> 
 
 #[cfg(test)]
 mod tests {
+    use crate::frontend::scanner::Scanner;
+    use crate::frontend::scanner::Lexeme::NumberLiteral;
+
     #[test]
     fn parse_numbers() {
+        let text = "123.12".to_string();
+        let mut scanner = Scanner::new(&text);
 
+        assert_eq!(NumberLiteral(123.12), scanner.scan_token().unwrap().lexeme)
     }
 }
