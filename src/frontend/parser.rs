@@ -1,200 +1,200 @@
-use std::iter::Peekable;
+use super::scanner::{scan_into_peekable, Lexeme, Token};
 use std::vec::IntoIter;
-use crate::frontend::ir::{Chunk, Constant, OpCode, BinaryOp, Offset};
-use crate::frontend::scanner::{Token, Position, ScanError, Lexeme, scan_into_peekable};
-use crate::frontend::debug::disassemble_chunk;
 
-type Rule = fn(&mut Parser) -> Result<(), CompilationError>;
-type Prefix = Option<Rule>;
-type Infix = Option<Rule>;
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CompilationError {
-    UnknownCharacter(Position, String),
-    UnexpectedToken(Token),
+    ScanError,
 }
 
-impl From<ScanError> for Vec<CompilationError> {
-    fn from(err: ScanError) -> Vec<CompilationError> {
-        match err {
-            ScanError::UnknownCharacter(pos, string) => {
-                vec![CompilationError::UnknownCharacter(pos, string)]
-            }
-        }
-    }
+#[derive(Debug, PartialEq)]
+pub enum ConstantType {
+    IntegerLiteral(f64),
+    StringLiteral(String),
 }
 
-#[derive(PartialOrd, PartialEq)]
-enum Precedence {
-    None,
-    Assignment,
-    // =
-    Or,
-    // or
-    And,
-    // and
-    Equality,
-    // == !=
-    Comparison,
-    // < > <= >=
-    Term,
-    // + -
-    Factor,
-    // * /
-    Unary,
-    // ! -
-    Call,
-    // . () []
-    Primary,
+#[derive(Debug, PartialEq)]
+pub struct ConstantLiteral {
+    token: Token,
+    token_type: ConstantType,
 }
 
-struct Parser {
-    chunk: Chunk,
-    tokens: Peekable<IntoIter<Token>>,
-    errors: Vec<CompilationError>,
+#[derive(Debug, PartialEq)]
+pub struct KeywordDetails {
+    token: Token,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct VariableDetails {
+    token: Token,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ListDetails {
+    head: Box<Node>,
+    rest: Vec<Node>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Node {
+    Null,
+    Constant(ConstantLiteral),
+    Keyword(KeywordDetails),
+    Variable(VariableDetails),
+    List(ListDetails),
+}
+
+pub(crate) struct Parser {
+    source: String,
+    current_token: Token,
 }
 
 impl Parser {
-    fn new(chunk: Chunk, scanner_tokens: IntoIter<Token>) -> Parser {
+    pub(crate) fn new(text: &str) -> Self {
         Parser {
-            chunk,
-            tokens: scanner_tokens.peekable(),
-            errors: Vec::new(),
+            source: String::from(text),
+            current_token: Token::new(),
         }
     }
 
-    fn find_rule(token: &Lexeme) -> (Prefix, Infix, Precedence) {
-        match token {
-            Lexeme::LeftParen => (Some(Parser::parse_group), None, Precedence::None),
-            Lexeme::RightParen => (None, None, Precedence::None),
-            Lexeme::LeftBrace | Lexeme::RightBrace => (None, None, Precedence::None),
-            Lexeme::Minus => (
-                Some(Parser::parse_unary_expression),
-                Some(Parser::parse_binary_expression),
-                Precedence::None,
-            ),
-            Lexeme::Plus | Lexeme::Slash | Lexeme::Star => (
-                None,
-                Some(Parser::parse_binary_expression),
-                Precedence::None,
-            ),
-            Lexeme::NumberLiteral(_) => (Some(Parser::parse_number), None, Precedence::None),
-            _ => (None, None, Precedence::None),
-        }
-    }
+    pub(crate) fn parse(&self) -> Result<Node, CompilationError> {
+        let mut tokens = match scan_into_peekable(self.source.to_owned()) {
+            Ok(tokens) => tokens,
+            Err(ScanError) => return Err(CompilationError::ScanError),
+        };
 
-    fn advance(&mut self) -> Option<Token> {
-        self.tokens.next()
-    }
-
-    fn consume(&mut self, token_type: Lexeme) -> Result<Token, CompilationError> {
-        match self.tokens.peek() {
+        return match tokens.next() {
             Some(Token {
-                     lexeme: token_type, ..
-                 }) => Ok(self.advance().unwrap()),
-            _ => Err(CompilationError::UnexpectedToken(self.advance().unwrap())),
-        }
+                lexeme: Lexeme::LeftParen,
+                ..
+            }) => self.parse_list(&mut tokens),
+            _ => Err(CompilationError::ScanError),
+        };
     }
 
-    fn emit_byte(&mut self, byte: OpCode, line: Offset) {
-        self.chunk.write(byte, line);
-    }
+    fn parse_list(&self, token_stream: &mut IntoIter<Token>) -> Result<Node, CompilationError> {
+        let mut list = Vec::<Node>::new();
 
-    fn emit_constant(&mut self, constant: Constant, line: Offset) {
-        let offset = self.chunk.add_constant(constant);
-        match constant {
-            Constant::Number(_) => self.emit_byte(OpCode::OpConstant(offset), line),
-        }
-    }
-
-    fn parse(mut self) -> Result<Chunk, Vec<CompilationError>> {
-        while let Some(_) = self.tokens.peek() {
-            if let Err(error) = self.parse_expression() {
-                self.errors.push(error);
+        while let Some(token) = token_stream.next() {
+            if token.lexeme == Lexeme::RightParen { break }
+            else if token.lexeme == Lexeme::LeftParen {
+                list.push(self.parse_list(token_stream)?)
             }
-        }
-        if !self.errors.is_empty() {
-            Err(self.errors)
-        } else {
-            Ok(self.chunk)
-        }
-    }
-
-    fn parse_expression(&mut self) -> Result<(), CompilationError> {
-        self.parse_precedence(Precedence::Assignment)
-    }
-
-    fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), CompilationError> {
-        let mut token = self.advance().unwrap();
-        let (prefix_function, _, _) = Self::find_rule(&token.lexeme);
-        let function = prefix_function.ok_or_else(|| CompilationError::UnexpectedToken(token))?;
-        function(self)?;
-
-        loop {
-            let next_token = self.tokens.peek().unwrap();
-            let (_, infix_function, next_precedence) = Self::find_rule(&next_token.lexeme);
-
-            if precedence <= next_precedence {
-                token = self.advance().unwrap();
-                let function =
-                    infix_function.ok_or_else(|| CompilationError::UnexpectedToken(token))?;
-                function(self)?;
+            else {
+                list.push(self.parse_item(token)?);
             }
-        }
+        };
+
+        return self.parse_expressions(list);
     }
 
-    fn parse_number(&mut self) -> Result<(), CompilationError> {
-        let token = self.advance().unwrap();
-        if let Lexeme::NumberLiteral(number) = token.lexeme {
-            self.emit_constant(Constant::Number(number), token.position.line)
-        }
-        Ok(())
+    fn parse_expressions(&self, mut list: Vec<Node>) -> Result<Node, CompilationError> {
+        let top =  list.remove(0);
+
+        Ok(Node::List(ListDetails {
+            head: Box::from(top),
+            rest: list,
+        }))
     }
 
-    fn parse_group(&mut self) -> Result<(), CompilationError> {
-        self.parse_expression()?;
-        self.consume(Lexeme::RightParen)?;
-        Ok(())
-    }
-
-    fn parse_binary_expression(&mut self) -> Result<(), CompilationError> {
-        let operator = self.advance().unwrap();
-
-        let (_, _, precedence) = Self::find_rule(&operator.lexeme);
-        self.parse_precedence(precedence)?;
-
-        match operator.lexeme {
-            Lexeme::Minus => self.emit_byte(
-                OpCode::BinaryOperation(BinaryOp::Add),
-                operator.position.line,
-            ),
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn parse_unary_expression(&mut self) -> Result<(), CompilationError> {
-        let token = self.advance().unwrap();
-
-        self.parse_precedence(Precedence::Unary)?;
-
-        match token.lexeme {
-            Lexeme::Minus => self.emit_byte(OpCode::OpNegate, token.position.line),
-            _ => {}
-        }
-        Ok(())
+    fn parse_item(&self, item: Token) -> Result<Node, CompilationError> {
+        return match item.lexeme {
+            Lexeme::NumberLiteral(number) => Ok(Node::Constant(ConstantLiteral {
+                token: item,
+                token_type: ConstantType::IntegerLiteral(number),
+            })),
+            Lexeme::Plus => Ok(Node::Keyword(KeywordDetails { token: item })),
+            _ => Ok(Node::Null)
+        };
     }
 }
 
-pub fn compile(source: String) -> Result<Chunk, Vec<CompilationError>> {
-    let mut chunk = Chunk::new();
-    let tokens = scan_into_peekable(source)?;
+#[cfg(test)]
+mod tests {
+    use crate::frontend::parser::{
+        ConstantLiteral, ConstantType, KeywordDetails, ListDetails, Node, Parser,
+    };
+    use crate::frontend::scanner::{Lexeme, Position, Token};
 
-    let parser = Parser::new(chunk, tokens);
-    chunk = parser.parse()?;
+    #[test]
+    fn parse_list() {
+        let text = "(+ 1 2)".to_string();
+        let mut parser = Parser::new(&text);
 
-    disassemble_chunk(&chunk, "code");
+        let tree = Node::List(ListDetails {
+            head: Box::from(Node::Keyword(KeywordDetails {
+                token: Token {
+                    lexeme: Lexeme::Plus,
+                    position: Position { line: 1, column: 3 },
+                },
+            })),
+            rest: vec![
+                Node::Constant(ConstantLiteral {
+                    token: Token {
+                        lexeme: Lexeme::NumberLiteral(1 as f64),
+                        position: Position { line: 1, column: 5 },
+                    },
+                    token_type: ConstantType::IntegerLiteral(1 as f64),
+                }),
+                Node::Constant(ConstantLiteral {
+                    token: Token {
+                        lexeme: Lexeme::NumberLiteral(2 as f64),
+                        position: Position { line: 1, column: 7 },
+                    },
+                    token_type: ConstantType::IntegerLiteral(2 as f64),
+                }),
+            ],
+        });
 
-    Ok(chunk)
+        assert_eq!(parser.parse(), Ok(tree))
+    }
+
+    #[test]
+    fn parse_nested_list() {
+        let text = "(+ 1 (+ 2 3))".to_string();
+        let mut parser = Parser::new(&text);
+
+        let tree = Node::List(ListDetails {
+            head: Box::from(Node::Keyword(KeywordDetails {
+                token: Token {
+                    lexeme: Lexeme::Plus,
+                    position: Position { line: 1, column: 3 },
+                },
+            })),
+            rest: vec![
+                Node::Constant(ConstantLiteral {
+                    token: Token {
+                        lexeme: Lexeme::NumberLiteral(1 as f64),
+                        position: Position { line: 1, column: 5 },
+                    },
+                    token_type: ConstantType::IntegerLiteral(1 as f64),
+                }),
+                Node::List(ListDetails {
+                    head: Box::from(Node::Keyword(KeywordDetails {
+                        token: Token {
+                            lexeme: Lexeme::Plus,
+                            position: Position { line: 1, column: 8 },
+                        },
+                    })),
+                    rest: vec![
+                        Node::Constant(ConstantLiteral {
+                            token: Token {
+                                lexeme: Lexeme::NumberLiteral(2 as f64),
+                                position: Position { line: 1, column: 10 },
+                            },
+                            token_type: ConstantType::IntegerLiteral(2 as f64),
+                        }),
+                        Node::Constant(ConstantLiteral {
+                            token: Token {
+                                lexeme: Lexeme::NumberLiteral(3 as f64),
+                                position: Position { line: 1, column: 12 },
+                            },
+                            token_type: ConstantType::IntegerLiteral(3 as f64),
+                        }),
+                    ],
+                }),
+            ],
+        });
+
+        assert_eq!(parser.parse(), Ok(tree))
+    }
 }

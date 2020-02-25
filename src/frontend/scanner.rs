@@ -45,10 +45,10 @@ pub enum Lexeme {
     EOF,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Position {
     pub line: usize,
-    column: usize,
+    pub column: usize,
 }
 
 impl Position {
@@ -66,7 +66,7 @@ impl Position {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Token {
     pub lexeme: Lexeme,
     pub position: Position,
@@ -341,8 +341,8 @@ pub fn scan_into_peekable(source: String) -> Result<IntoIter<Token>, ScanError> 
 
 #[cfg(test)]
 mod tests {
-    use crate::frontend::scanner::Scanner;
     use crate::frontend::scanner::Lexeme::NumberLiteral;
+    use crate::frontend::scanner::Scanner;
 
     #[test]
     fn parse_numbers() {

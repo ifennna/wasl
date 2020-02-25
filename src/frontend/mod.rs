@@ -1,4 +1,2 @@
 mod scanner;
-mod parser;
-mod ir;
-mod debug;
+pub(crate) mod parser;
