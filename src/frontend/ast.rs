@@ -41,5 +41,6 @@ pub enum Node {
     Keyword(KeywordDetails),
     Variable(VariableDetails),
     Map(Vec<MapItem>),
+    Vector(Vec<Node>),
     List(ListDetails),
 }

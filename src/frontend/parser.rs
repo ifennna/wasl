@@ -35,6 +35,10 @@ impl Parser {
                 lexeme: Lexeme::LeftBrace,
                 ..
             }) => self.parse_map(&mut tokens),
+            Some(Token {
+                 lexeme: Lexeme::LeftBracket,
+                 ..
+            }) => self.parse_vector(&mut tokens),
             _ => Err(CompilationError::ScanError),
         };
     }
@@ -52,7 +56,25 @@ impl Parser {
             }
         };
 
-        return self.parse_expressions(list);
+        let top =  list.remove(0);
+
+        Ok(Node::List(ListDetails {
+            head: Box::from(top),
+            rest: list,
+        }))
+    }
+
+    fn parse_vector(&self, token_stream: &mut IntoIter<Token>) -> Result<Node, CompilationError> {
+        let mut list = Vec::<Node>::new();
+
+        while let Some(token) = token_stream.next() {
+            if token.lexeme == Lexeme::RightBracket { break }
+            else {
+                list.push(self.parse_item(token)?);
+            }
+        };
+
+        Ok(Node::Vector(list))
     }
 
     fn parse_map(&self, token_stream: &mut IntoIter<Token>) -> Result<Node, CompilationError> {
@@ -77,15 +99,6 @@ impl Parser {
         }
 
         Ok(Node::Map(map_items))
-    }
-
-    fn parse_expressions(&self, mut list: Vec<Node>) -> Result<Node, CompilationError> {
-        let top =  list.remove(0);
-
-        Ok(Node::List(ListDetails {
-            head: Box::from(top),
-            rest: list,
-        }))
     }
 
     fn parse_item(&self, item: Token) -> Result<Node, CompilationError> {
@@ -209,6 +222,31 @@ mod tests {
                 },
                 token_type: ConstantType::IntegerLiteral(2 as f64),
             }) },
+        ]);
+
+        assert_eq!(parser.parse(), Ok(tree))
+    }
+
+    #[test]
+    fn parse_vector() {
+        let text = "[1 2]".to_string();
+        let mut parser = Parser::new(&text);
+
+        let tree = Node::Vector(vec![
+            Node::Constant(ConstantLiteral {
+                token: Token {
+                    lexeme: Lexeme::NumberLiteral(1 as f64),
+                    position: Position { line: 1, column: 3 },
+                },
+                token_type: ConstantType::IntegerLiteral(1 as f64),
+            }),
+            Node::Constant(ConstantLiteral {
+                token: Token {
+                    lexeme: Lexeme::NumberLiteral(2 as f64),
+                    position: Position { line: 1, column: 5 },
+                },
+                token_type: ConstantType::IntegerLiteral(2 as f64),
+            }),
         ]);
 
         assert_eq!(parser.parse(), Ok(tree))

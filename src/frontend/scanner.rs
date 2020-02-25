@@ -9,6 +9,8 @@ pub enum Lexeme {
     RightParen,
     LeftBrace,
     RightBrace,
+    LeftBracket,
+    RightBracket,
     Comma,
     Dot,
     Minus,
@@ -153,6 +155,8 @@ impl<'a> Scanner<'a> {
             Some(')') => self.make_token(Lexeme::RightParen),
             Some('{') => self.make_token(Lexeme::LeftBrace),
             Some('}') => self.make_token(Lexeme::RightBrace),
+            Some('[') => self.make_token(Lexeme::LeftBracket),
+            Some(']') => self.make_token(Lexeme::RightBracket),
             Some(':') => {
                 if self.peek_match(' ') {
                     self.make_token(Lexeme::Colon)
