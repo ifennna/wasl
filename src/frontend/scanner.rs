@@ -31,6 +31,7 @@ pub enum Lexeme {
     NumberLiteral(f64),
 
     And,
+    MapKey(String),
     False,
     For,
     Cond,
@@ -152,7 +153,13 @@ impl<'a> Scanner<'a> {
             Some(')') => self.make_token(Lexeme::RightParen),
             Some('{') => self.make_token(Lexeme::LeftBrace),
             Some('}') => self.make_token(Lexeme::RightBrace),
-            Some(':') => self.make_token(Lexeme::Colon),
+            Some(':') => {
+                if self.peek_match(' ') {
+                    self.make_token(Lexeme::Colon)
+                } else {
+                    self.make_map_key()
+                }
+            },
             Some(',') => self.make_token(Lexeme::Comma),
             Some('.') => self.make_token(Lexeme::Dot),
             Some('-') => self.make_token(Lexeme::Minus),
@@ -275,6 +282,21 @@ impl<'a> Scanner<'a> {
     }
 
     fn make_identifier(&mut self) -> Result<Token, ScanError> {
+        self.scan_word();
+        let token_type = self.check_identifier_type();
+
+        self.make_token(token_type)
+    }
+
+    fn make_map_key(&mut self) -> Result<Token, ScanError> {
+        // remove the starting ':'
+        self.current_string.pop();
+
+        self.scan_word();
+        self.make_token(Lexeme::MapKey(String::from(&self.current_string)))
+    }
+
+    fn scan_word(&mut self) {
         loop {
             match self.source.peek() {
                 Some(&ch) if is_alpha(ch) || is_digit(ch) => {
@@ -283,10 +305,6 @@ impl<'a> Scanner<'a> {
                 _ => break,
             }
         }
-
-        let token_type = self.check_identifier_type();
-
-        self.make_token(token_type)
     }
 
     fn check_identifier_type(&mut self) -> Lexeme {

@@ -1,46 +1,10 @@
 use super::scanner::{scan_into_peekable, Lexeme, Token};
 use std::vec::IntoIter;
+use crate::frontend::ast::{Node, ListDetails, ConstantLiteral, ConstantType, KeywordDetails, MapItem};
 
 #[derive(Debug, PartialEq)]
 pub enum CompilationError {
     ScanError,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ConstantType {
-    IntegerLiteral(f64),
-    StringLiteral(String),
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ConstantLiteral {
-    token: Token,
-    token_type: ConstantType,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct KeywordDetails {
-    token: Token,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct VariableDetails {
-    token: Token,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ListDetails {
-    head: Box<Node>,
-    rest: Vec<Node>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Node {
-    Null,
-    Constant(ConstantLiteral),
-    Keyword(KeywordDetails),
-    Variable(VariableDetails),
-    List(ListDetails),
 }
 
 pub(crate) struct Parser {
@@ -67,6 +31,10 @@ impl Parser {
                 lexeme: Lexeme::LeftParen,
                 ..
             }) => self.parse_list(&mut tokens),
+            Some(Token {
+                lexeme: Lexeme::LeftBrace,
+                ..
+            }) => self.parse_map(&mut tokens),
             _ => Err(CompilationError::ScanError),
         };
     }
@@ -85,6 +53,30 @@ impl Parser {
         };
 
         return self.parse_expressions(list);
+    }
+
+    fn parse_map(&self, token_stream: &mut IntoIter<Token>) -> Result<Node, CompilationError> {
+        let mut map_items = Vec::<MapItem>::new();
+        while let Some(token) =  token_stream.next() {
+            match token.lexeme {
+                Lexeme::MapKey(name) => {
+                    let item = match token_stream.next() {
+                        Some(value) => MapItem { key: name, value: self.parse_item(value)? },
+                        None => return Err(CompilationError::ScanError)
+                    };
+                    map_items.push(item);
+                },
+                Lexeme::RightBrace => { break }
+                _ => {
+                    map_items.push(MapItem {
+                        key: String::from(""),
+                        value: self.parse_item(token) ?
+                    });
+                }
+            }
+        }
+
+        Ok(Node::Map(map_items))
     }
 
     fn parse_expressions(&self, mut list: Vec<Node>) -> Result<Node, CompilationError> {
@@ -110,10 +102,9 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::frontend::parser::{
-        ConstantLiteral, ConstantType, KeywordDetails, ListDetails, Node, Parser,
-    };
     use crate::frontend::scanner::{Lexeme, Position, Token};
+    use crate::frontend::ast::{Node, ListDetails, KeywordDetails, ConstantLiteral, ConstantType, MapItem};
+    use crate::frontend::parser::Parser;
 
     #[test]
     fn parse_list() {
@@ -194,6 +185,31 @@ mod tests {
                 }),
             ],
         });
+
+        assert_eq!(parser.parse(), Ok(tree))
+    }
+
+    #[test]
+    fn parse_map() {
+        let text = "{:guten 1 :tag 2}".to_string();
+        let mut parser = Parser::new(&text);
+
+        let tree = Node::Map(vec![
+            MapItem{ key: "guten".to_string(), value: Node::Constant(ConstantLiteral {
+                token: Token {
+                    lexeme: Lexeme::NumberLiteral(1 as f64),
+                    position: Position { line: 1, column: 10 },
+                },
+                token_type: ConstantType::IntegerLiteral(1 as f64),
+            }) },
+            MapItem{ key: "tag".to_string(), value: Node::Constant(ConstantLiteral {
+                token: Token {
+                    lexeme: Lexeme::NumberLiteral(2 as f64),
+                    position: Position { line: 1, column: 17 },
+                },
+                token_type: ConstantType::IntegerLiteral(2 as f64),
+            }) },
+        ]);
 
         assert_eq!(parser.parse(), Ok(tree))
     }
