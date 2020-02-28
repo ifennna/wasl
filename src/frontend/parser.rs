@@ -1,6 +1,6 @@
 use super::scanner::{scan_into_peekable, Lexeme, Token};
 use std::vec::IntoIter;
-use crate::frontend::ast::{Node, ListDetails, ConstantLiteral, ConstantType, KeywordDetails, MapItem};
+use crate::frontend::ast::{Node, ListDetails, ConstantLiteral, KeywordDetails, MapItem};
 
 #[derive(Debug, PartialEq)]
 pub enum CompilationError {
@@ -23,7 +23,7 @@ impl Parser {
     pub(crate) fn parse(&self) -> Result<Node, CompilationError> {
         let mut tokens = match scan_into_peekable(self.source.to_owned()) {
             Ok(tokens) => tokens,
-            Err(ScanError) => return Err(CompilationError::ScanError),
+            Err(_) => return Err(CompilationError::ScanError),
         };
 
         return match tokens.next() {
@@ -103,11 +103,10 @@ impl Parser {
 
     fn parse_item(&self, item: Token) -> Result<Node, CompilationError> {
         return match item.lexeme {
-            Lexeme::NumberLiteral(number) => Ok(Node::Constant(ConstantLiteral {
-                token: item,
-                token_type: ConstantType::IntegerLiteral(number),
-            })),
-            Lexeme::Plus => Ok(Node::Keyword(KeywordDetails { token: item })),
+            Lexeme::NumberLiteral(number) =>
+                Ok(Node::Constant(ConstantLiteral::IntegerLiteral(number))),
+            Lexeme::Plus | Lexeme::Minus |
+            Lexeme::And | Lexeme::Or => Ok(Node::Keyword(KeywordDetails { token: item.lexeme })),
             _ => Ok(Node::Null)
         };
     }
@@ -115,8 +114,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::frontend::scanner::{Lexeme, Position, Token};
-    use crate::frontend::ast::{Node, ListDetails, KeywordDetails, ConstantLiteral, ConstantType, MapItem};
+    use crate::frontend::scanner::{Lexeme};
+    use crate::frontend::ast::{Node, ListDetails, KeywordDetails, ConstantLiteral, MapItem};
     use crate::frontend::parser::Parser;
 
     #[test]
@@ -126,26 +125,11 @@ mod tests {
 
         let tree = Node::List(ListDetails {
             head: Box::from(Node::Keyword(KeywordDetails {
-                token: Token {
-                    lexeme: Lexeme::Plus,
-                    position: Position { line: 1, column: 3 },
-                },
+                token: Lexeme::Plus,
             })),
             rest: vec![
-                Node::Constant(ConstantLiteral {
-                    token: Token {
-                        lexeme: Lexeme::NumberLiteral(1 as f64),
-                        position: Position { line: 1, column: 5 },
-                    },
-                    token_type: ConstantType::IntegerLiteral(1 as f64),
-                }),
-                Node::Constant(ConstantLiteral {
-                    token: Token {
-                        lexeme: Lexeme::NumberLiteral(2 as f64),
-                        position: Position { line: 1, column: 7 },
-                    },
-                    token_type: ConstantType::IntegerLiteral(2 as f64),
-                }),
+                Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)),
+                Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)),
             ],
         });
 
@@ -159,41 +143,17 @@ mod tests {
 
         let tree = Node::List(ListDetails {
             head: Box::from(Node::Keyword(KeywordDetails {
-                token: Token {
-                    lexeme: Lexeme::Plus,
-                    position: Position { line: 1, column: 3 },
-                },
+                token: Lexeme::Plus,
             })),
             rest: vec![
-                Node::Constant(ConstantLiteral {
-                    token: Token {
-                        lexeme: Lexeme::NumberLiteral(1 as f64),
-                        position: Position { line: 1, column: 5 },
-                    },
-                    token_type: ConstantType::IntegerLiteral(1 as f64),
-                }),
+                Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)),
                 Node::List(ListDetails {
                     head: Box::from(Node::Keyword(KeywordDetails {
-                        token: Token {
-                            lexeme: Lexeme::Plus,
-                            position: Position { line: 1, column: 8 },
-                        },
+                        token: Lexeme::Plus,
                     })),
                     rest: vec![
-                        Node::Constant(ConstantLiteral {
-                            token: Token {
-                                lexeme: Lexeme::NumberLiteral(2 as f64),
-                                position: Position { line: 1, column: 10 },
-                            },
-                            token_type: ConstantType::IntegerLiteral(2 as f64),
-                        }),
-                        Node::Constant(ConstantLiteral {
-                            token: Token {
-                                lexeme: Lexeme::NumberLiteral(3 as f64),
-                                position: Position { line: 1, column: 12 },
-                            },
-                            token_type: ConstantType::IntegerLiteral(3 as f64),
-                        }),
+                        Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)),
+                        Node::Constant(ConstantLiteral::IntegerLiteral(3 as i64)),
                     ],
                 }),
             ],
@@ -208,20 +168,12 @@ mod tests {
         let mut parser = Parser::new(&text);
 
         let tree = Node::Map(vec![
-            MapItem{ key: "guten".to_string(), value: Node::Constant(ConstantLiteral {
-                token: Token {
-                    lexeme: Lexeme::NumberLiteral(1 as f64),
-                    position: Position { line: 1, column: 10 },
-                },
-                token_type: ConstantType::IntegerLiteral(1 as f64),
-            }) },
-            MapItem{ key: "tag".to_string(), value: Node::Constant(ConstantLiteral {
-                token: Token {
-                    lexeme: Lexeme::NumberLiteral(2 as f64),
-                    position: Position { line: 1, column: 17 },
-                },
-                token_type: ConstantType::IntegerLiteral(2 as f64),
-            }) },
+            MapItem{
+                key: "guten".to_string(),
+                value: Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)), },
+            MapItem{
+                key: "tag".to_string(),
+                value: Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)), },
         ]);
 
         assert_eq!(parser.parse(), Ok(tree))
@@ -233,20 +185,8 @@ mod tests {
         let mut parser = Parser::new(&text);
 
         let tree = Node::Vector(vec![
-            Node::Constant(ConstantLiteral {
-                token: Token {
-                    lexeme: Lexeme::NumberLiteral(1 as f64),
-                    position: Position { line: 1, column: 3 },
-                },
-                token_type: ConstantType::IntegerLiteral(1 as f64),
-            }),
-            Node::Constant(ConstantLiteral {
-                token: Token {
-                    lexeme: Lexeme::NumberLiteral(2 as f64),
-                    position: Position { line: 1, column: 5 },
-                },
-                token_type: ConstantType::IntegerLiteral(2 as f64),
-            }),
+        Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)),
+        Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)),
         ]);
 
         assert_eq!(parser.parse(), Ok(tree))

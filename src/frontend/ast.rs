@@ -1,25 +1,19 @@
-use crate::frontend::scanner::Token;
+use crate::frontend::scanner::Lexeme;
 
 #[derive(Debug, PartialEq)]
-pub enum ConstantType {
-    IntegerLiteral(f64),
+pub enum ConstantLiteral {
+    IntegerLiteral(i64),
     StringLiteral(String),
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ConstantLiteral {
-    pub token: Token,
-    pub token_type: ConstantType,
-}
-
-#[derive(Debug, PartialEq)]
 pub struct KeywordDetails {
-    pub token: Token,
+    pub token: Lexeme,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct VariableDetails {
-    pub token: Token,
+    pub token: Lexeme,
 }
 
 #[derive(Debug, PartialEq)]

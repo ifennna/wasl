@@ -30,7 +30,7 @@ pub enum Lexeme {
 
     Identifier(String),
     StringLiteral(String),
-    NumberLiteral(f64),
+    NumberLiteral(i64),
 
     And,
     MapKey(String),
