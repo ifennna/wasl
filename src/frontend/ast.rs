@@ -1,5 +1,7 @@
 use crate::frontend::scanner::Lexeme;
 
+type VariableName = String;
+
 #[derive(Debug, PartialEq)]
 pub enum ConstantLiteral {
     IntegerLiteral(i64),
@@ -12,14 +14,28 @@ pub struct KeywordDetails {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct VariableDetails {
-    pub token: Lexeme,
-}
-
-#[derive(Debug, PartialEq)]
 pub struct ListDetails {
     pub head: Box<Node>,
     pub rest: Vec<Node>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FunctionDetails {
+    pub name: Box<Node>,
+    pub args: Vec<Node>,
+    pub body: Box<Node>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MainDetails {
+    pub args: Vec<Node>,
+    pub body: Box<Node>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct VariableInformation {
+    pub name: Box<Node>,
+    pub value: Box<Node>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -31,9 +47,12 @@ pub struct MapItem {
 #[derive(Debug, PartialEq)]
 pub enum Node {
     Null,
+    Main(MainDetails),
+    Def(VariableInformation),
+    Function(FunctionDetails),
     Constant(ConstantLiteral),
     Keyword(KeywordDetails),
-    Variable(VariableDetails),
+    Variable(VariableName),
     Map(Vec<MapItem>),
     Vector(Vec<Node>),
     List(ListDetails),

@@ -1,29 +1,41 @@
 use super::scanner::{scan_into_peekable, Lexeme, Token};
 use std::vec::IntoIter;
-use crate::frontend::ast::{Node, ListDetails, ConstantLiteral, KeywordDetails, MapItem};
+use crate::frontend::ast::{Node, ListDetails, ConstantLiteral, KeywordDetails, MapItem, FunctionDetails, MainDetails};
+use crate::frontend::scanner::Position;
+use std::option::NoneError;
+use std::iter::Peekable;
+
+type TokenStream = Peekable<IntoIter<Token>>;
 
 #[derive(Debug, PartialEq)]
-pub enum CompilationError {
+pub enum ParseError {
     ScanError,
+    UnexpectedEndOfFile,
+    UnexpectedToken(Position, Lexeme),
+    InvalidFunctionName(Position, Lexeme)
+}
+
+impl From<NoneError> for ParseError {
+    fn from(_: NoneError) -> Self {
+        ParseError::UnexpectedEndOfFile
+    }
 }
 
 pub(crate) struct Parser {
     source: String,
-    current_token: Token,
 }
 
 impl Parser {
     pub(crate) fn new(text: &str) -> Self {
         Parser {
             source: String::from(text),
-            current_token: Token::new(),
         }
     }
 
-    pub(crate) fn parse(&self) -> Result<Node, CompilationError> {
+    pub(crate) fn parse(&self) -> Result<Node, ParseError> {
         let mut tokens = match scan_into_peekable(self.source.to_owned()) {
             Ok(tokens) => tokens,
-            Err(_) => return Err(CompilationError::ScanError),
+            Err(_) => return Err(ParseError::ScanError),
         };
 
         return match tokens.next() {
@@ -39,32 +51,69 @@ impl Parser {
                  lexeme: Lexeme::LeftBracket,
                  ..
             }) => self.parse_vector(&mut tokens),
-            _ => Err(CompilationError::ScanError),
+            _ => Err(ParseError::ScanError),
         };
     }
 
-    fn parse_list(&self, token_stream: &mut IntoIter<Token>) -> Result<Node, CompilationError> {
-        let mut list = Vec::<Node>::new();
+    fn parse_list(&self, token_stream: &mut TokenStream) -> Result<Node, ParseError> {
+        match token_stream.peek() {
+            Some(Token{lexeme: Lexeme::Defn, ..}) => self.parse_function_definition(token_stream),
+            _ => self.parse_seq_list(token_stream)
+        }
+    }
 
+    fn parse_function_definition(&self, token_stream: &mut TokenStream) -> Result<Node, ParseError> {
+        // dump the defn token
+        token_stream.next();
+        let name_token = token_stream.next()?;
+        let name = match &name_token {
+            Token{lexeme: Lexeme::Main, ..} => self.build_fake_main_node(),
+            Token{lexeme: Lexeme::Identifier(_), ..} => self.parse_item(name_token)?,
+            _ => return Err(ParseError::InvalidFunctionName(name_token.position, name_token.lexeme))
+        };
+        let mut args = Vec::new();
+        let body;
+
+        let next_element = match token_stream.next()? {
+            Token{lexeme: Lexeme::LeftBracket, ..} => self.parse_vector(token_stream)?,
+            Token{lexeme: Lexeme::LeftParen, ..} => self.parse_list(token_stream)?,
+            token => return Err(ParseError::UnexpectedToken(token.position, token.lexeme))
+        };
+
+        match next_element {
+            Node::Vector(arguments) => {
+                println!("{:?}", arguments);
+                args = arguments;
+                token_stream.next();
+                body = self.parse_list(token_stream)?;
+            }
+            _ => body = next_element
+        };
+
+        match name {
+            Node::Main(..) => Ok(Node::Main(MainDetails{ args, body: Box::new(body) })),
+            _ => Ok(Node::Function(FunctionDetails{name: Box::new(name), args, body: Box::new(body) }))
+        }
+    }
+
+    fn parse_seq_list(&self, token_stream: &mut TokenStream) -> Result<Node, ParseError> {
+        let mut list = Vec::<Node>::new();
         while let Some(token) = token_stream.next() {
             if token.lexeme == Lexeme::RightParen { break }
             else if token.lexeme == Lexeme::LeftParen {
                 list.push(self.parse_list(token_stream)?)
-            }
-            else {
+            } else {
                 list.push(self.parse_item(token)?);
             }
         };
-
-        let top =  list.remove(0);
-
+        let top = list.remove(0);
         Ok(Node::List(ListDetails {
             head: Box::from(top),
             rest: list,
         }))
     }
 
-    fn parse_vector(&self, token_stream: &mut IntoIter<Token>) -> Result<Node, CompilationError> {
+    fn parse_vector(&self, token_stream: &mut TokenStream) -> Result<Node, ParseError> {
         let mut list = Vec::<Node>::new();
 
         while let Some(token) = token_stream.next() {
@@ -77,14 +126,14 @@ impl Parser {
         Ok(Node::Vector(list))
     }
 
-    fn parse_map(&self, token_stream: &mut IntoIter<Token>) -> Result<Node, CompilationError> {
+    fn parse_map(&self, token_stream: &mut TokenStream) -> Result<Node, ParseError> {
         let mut map_items = Vec::<MapItem>::new();
         while let Some(token) =  token_stream.next() {
             match token.lexeme {
                 Lexeme::MapKey(name) => {
                     let item = match token_stream.next() {
                         Some(value) => MapItem { key: name, value: self.parse_item(value)? },
-                        None => return Err(CompilationError::ScanError)
+                        None => return Err(ParseError::ScanError)
                     };
                     map_items.push(item);
                 },
@@ -101,14 +150,23 @@ impl Parser {
         Ok(Node::Map(map_items))
     }
 
-    fn parse_item(&self, item: Token) -> Result<Node, CompilationError> {
+    fn parse_item(&self, item: Token) -> Result<Node, ParseError> {
         return match item.lexeme {
             Lexeme::NumberLiteral(number) =>
                 Ok(Node::Constant(ConstantLiteral::IntegerLiteral(number))),
             Lexeme::Plus | Lexeme::Minus |
-            Lexeme::And | Lexeme::Or => Ok(Node::Keyword(KeywordDetails { token: item.lexeme })),
+            Lexeme::And | Lexeme::Or |
+            Lexeme::Print => Ok(Node::Keyword(KeywordDetails { token: item.lexeme })),
+            Lexeme::Identifier(name) => Ok(Node::Variable(name)),
             _ => Ok(Node::Null)
         };
+    }
+
+    fn build_fake_main_node(&self) -> Node {
+        Node::Main(MainDetails{
+            args: Vec::new(),
+            body: Box::new(Node::Null)
+        })
     }
 }
 

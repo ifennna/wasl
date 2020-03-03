@@ -2,6 +2,7 @@ use itertools::MultiPeek;
 use std::str::Chars;
 use std::vec::IntoIter;
 use std::{error, fmt};
+use std::iter::Peekable;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Lexeme {
@@ -18,7 +19,6 @@ pub enum Lexeme {
     Colon,
     Slash,
     Star,
-
     Bang,
     BangEqual,
     Equal,
@@ -38,10 +38,12 @@ pub enum Lexeme {
     For,
     Cond,
     Def,
+    Defn,
     Nil,
     Or,
     Print,
     True,
+    Main,
 
     Comment,
     Whitespace,
@@ -321,7 +323,15 @@ impl<'a> Scanner<'a> {
                 _ => Lexeme::Identifier(String::from(&self.current_string)),
             },
             'c' => check_keyword(&self.current_string, 1, "ond".into(), Lexeme::Cond),
-            'd' => check_keyword(&self.current_string, 1, "ef".into(), Lexeme::Def),
+            'd' if self.current_string.len() > 1 => match current_chars.peek().unwrap() {
+                'e' if self.current_string.len() > 2 => match current_chars.peek().unwrap() {
+                    'f' => check_keyword(&self.current_string, 3, "n".into(), Lexeme::Defn),
+                    _ => Lexeme::Identifier(String::from(&self.current_string)),
+                },
+                'e' => check_keyword(&self.current_string, 2, "f".into(), Lexeme::Def),
+                _ => Lexeme::Identifier(String::from(&self.current_string)),
+            },
+            'm' => check_keyword(&self.current_string, 1, "ain".into(), Lexeme::Main),
             'n' => check_keyword(&self.current_string, 1, "il".into(), Lexeme::Nil),
             'o' => check_keyword(&self.current_string, 1, "r".into(), Lexeme::Or),
             'p' => check_keyword(&self.current_string, 1, "rint".into(), Lexeme::Print),
@@ -338,7 +348,7 @@ impl<'a> Scanner<'a> {
     }
 }
 
-pub fn scan_into_peekable(source: String) -> Result<IntoIter<Token>, ScanError> {
+pub fn scan_into_peekable(source: String) -> Result<Peekable<IntoIter<Token>>, ScanError> {
     let mut scanner = Scanner::new(&source);
     let mut tokens = Vec::new();
     loop {
@@ -358,7 +368,7 @@ pub fn scan_into_peekable(source: String) -> Result<IntoIter<Token>, ScanError> 
             any => tokens.push(any),
         }
     }
-    Ok(tokens.into_iter())
+    Ok(tokens.into_iter().peekable())
 }
 
 #[cfg(test)]
@@ -368,9 +378,9 @@ mod tests {
 
     #[test]
     fn parse_numbers() {
-        let text = "123.12".to_string();
+        let text = "123".to_string();
         let mut scanner = Scanner::new(&text);
 
-        assert_eq!(NumberLiteral(123.12), scanner.scan_token().unwrap().lexeme)
+        assert_eq!(NumberLiteral(123 as i64), scanner.scan_token().unwrap().lexeme)
     }
 }
