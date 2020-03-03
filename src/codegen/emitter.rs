@@ -1,4 +1,4 @@
-use crate::frontend::ast::{Node, ListDetails, ConstantLiteral};
+use crate::frontend::ast::{Node, ListDetails, ConstantLiteral, MainDetails};
 use crate::frontend::scanner::{Lexeme};
 use crate::codegen::instructions::{Opcodes, Types};
 
@@ -14,60 +14,78 @@ impl Emitter {
     }
 
     pub fn emit(&self) -> String {
-        let body = self.build_body();
-        Emitter::get_body_with_header(body)
+        let body = self.build_body(&self.tree);
+        self.get_body_with_header(body)
     }
 
-    fn get_body_with_header(mut body: Vec<String>) -> String {
+    fn get_body_with_header(&self, mut body: Vec<String>) -> String {
         body.insert(0, "(module ".to_owned());
+        body.append(self.emit_export().as_mut());
         body.push(")".to_owned());
 
         body.join("\n ")
     }
 
-    fn build_body(&self) -> Vec<String> {
+    fn build_body(&self, tree: &Node) -> Vec<String> {
         let mut body = Vec::<String>::new();
-        match &self.tree {
-            Node::List(list) => body.append(self.emit_function(list).as_mut()),
-            _ => {}
+        match tree {
+            Node::List(list) => body.append(self.emit_function_call(list).as_mut()),
+            Node::Null => {}
+            Node::Main(details) => body.append(self.emit_main_function(details).as_mut()),
+            Node::Def(_) => {}
+            Node::Function(_) => {}
+            Node::Constant(constant) => body.append(self.emit_constant(constant).as_mut()),
+            Node::Keyword(_) => {}
+            Node::Variable(_) => {}
+            Node::Map(_) => {}
+            Node::Vector(_) => {}
         };
-        body.append(self.emit_export().as_mut());
         body
     }
 
-    fn emit_function(&self, list: &ListDetails) -> Vec<String> {
-        if let box Node::Keyword(details) = &list.head {
-            match &details.token {
-                &Lexeme::Plus => self.emit_add_function(&list.rest),
-                _ => vec![]
-            }
-        } else {vec![]}
-    }
-
-    fn emit_export(&self) -> Vec<String> {
-        vec!["(export \"_start\" (func 0))".to_owned()]
-    }
-
-    fn emit_add_function(&self, args: &Vec<Node>) -> Vec<String> {
-        let mut body = Vec::new();
+    fn emit_main_function(&self, details: &MainDetails) -> Vec<String> {
         let mut types = Vec::new();
-        for argument in args {
-            body.append(self.evaluate_node(argument).as_mut())
+        for (index, _) in details.args.iter().enumerate() {
+            types.push(Types::I64Param(index).to_string());
         }
         types.push(Types::I64Result.to_string());
-        body.push(Opcodes::Add.to_string());
-        let mut function = vec!["(func ".to_owned()];
+        let mut body = self.build_body(details.body.as_ref());
+        let mut function = vec!["(func $main ".to_owned()];
         function.append(types.as_mut());
         function.append(body.as_mut());
         function.push(")".to_owned());
         function
     }
 
-    fn evaluate_node(&self, node: &Node) -> Vec<String> {
-        match node {
-            Node::Constant(constant) => self.emit_constant(constant),
-            _ => vec![]
+    fn emit_function_call(&self, list: &ListDetails) -> Vec<String> {
+        if let box Node::Keyword(details) = &list.head {
+            match &details.token {
+                &Lexeme::Plus => self.emit_add_function(&list.rest),
+                &Lexeme::Print => self.emit_print_function(&list.rest),
+                _ => vec![]
+            }
+        } else {vec![]}
+    }
+
+    fn emit_export(&self) -> Vec<String> {
+        vec!["(export \"_start\" (func $main))".to_owned()]
+    }
+
+    fn emit_add_function(&self, args: &Vec<Node>) -> Vec<String> {
+        let mut body = vec![Opcodes::Add.to_string()];
+        for argument in args {
+            body.append(self.build_body(argument).as_mut())
         }
+        body.push(")".to_owned());
+        body
+    }
+
+    fn emit_print_function(&self, args: &Vec<Node>) -> Vec<String> {
+        let mut body = vec![];
+        for argument in args {
+            body.append(self.build_body(argument).as_mut())
+        }
+        body
     }
 
     fn emit_constant(&self, constant: &ConstantLiteral) -> Vec<String> {

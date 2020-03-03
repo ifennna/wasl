@@ -19,7 +19,6 @@ impl Display for Types {
         match self {
             Types::I64Param(name) => write!(f, "(param $p{:?} i64)", name),
             Types::I64Result=> write!(f, "(result i64)"),
-            _ => unreachable!()
         }
     }
 }
@@ -28,9 +27,8 @@ impl Display for Opcodes {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
             Opcodes::GetLocal => write!(f, "(get_local)"),
-            Opcodes::Add => write!(f, "(i64.add)"),
+            Opcodes::Add => write!(f, "(i64.add"),
             Opcodes::Const(constant) => write!(f, "(i64.const {:?})", constant),
-            _ => unreachable!()
         }
     }
 }
