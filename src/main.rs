@@ -7,11 +7,16 @@ mod codegen;
 use frontend::parser::Parser;
 use codegen::emitter::Emitter;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Write, BufReader, Read};
+use std::env;
 
 fn main() -> std::io::Result<()> {
-    let text = "(defn main (print \"Hello world\"))".to_string();
-    let parser = Parser::new(&text);
+    let args: Vec<String> = env::args().collect();
+    let file = File::open(args[1].to_owned())?;
+    let mut buf_reader = BufReader::new(file);
+    let mut contents = String::new();
+    buf_reader.read_to_string(&mut contents)?;
+    let parser = Parser::new(&contents);
 
     let parse_result = parser.parse();
     let tree  = parse_result.unwrap();
