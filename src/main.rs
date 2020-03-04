@@ -10,13 +10,13 @@ use std::fs::File;
 use std::io::Write;
 
 fn main() -> std::io::Result<()> {
-    let text = "(defn main (print (+ 40 3)))".to_string();
+    let text = "(defn main (print \"Hello world\"))".to_string();
     let parser = Parser::new(&text);
 
     let parse_result = parser.parse();
     let tree  = parse_result.unwrap();
-    let emitter = Emitter::new(tree);
-    let content = emitter.emit();
+    let mut emitter = Emitter::new();
+    let content = emitter.emit(tree);
 
     let mut out = File::create("main.wat")?;
     out.write_all(content.as_bytes())?;

@@ -4,7 +4,7 @@ type VariableName = String;
 
 #[derive(Debug, PartialEq)]
 pub enum ConstantLiteral {
-    IntegerLiteral(i64),
+    IntegerLiteral(i32),
     StringLiteral(String),
 }
 

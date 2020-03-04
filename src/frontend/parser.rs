@@ -4,6 +4,7 @@ use crate::frontend::ast::{Node, ListDetails, ConstantLiteral, KeywordDetails, M
 use crate::frontend::scanner::Position;
 use std::option::NoneError;
 use std::iter::Peekable;
+use crate::frontend::ast::Node::Constant;
 
 type TokenStream = Peekable<IntoIter<Token>>;
 
@@ -154,6 +155,8 @@ impl Parser {
         return match item.lexeme {
             Lexeme::NumberLiteral(number) =>
                 Ok(Node::Constant(ConstantLiteral::IntegerLiteral(number))),
+            Lexeme::StringLiteral(string) =>
+                Ok(Node::Constant(ConstantLiteral::StringLiteral(string))),
             Lexeme::Plus | Lexeme::Minus |
             Lexeme::And | Lexeme::Or |
             Lexeme::Print => Ok(Node::Keyword(KeywordDetails { token: item.lexeme })),
@@ -186,8 +189,8 @@ mod tests {
                 token: Lexeme::Plus,
             })),
             rest: vec![
-                Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)),
-                Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)),
+                Node::Constant(ConstantLiteral::IntegerLiteral(1 as i32)),
+                Node::Constant(ConstantLiteral::IntegerLiteral(2 as i32)),
             ],
         });
 
@@ -204,14 +207,14 @@ mod tests {
                 token: Lexeme::Plus,
             })),
             rest: vec![
-                Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)),
+                Node::Constant(ConstantLiteral::IntegerLiteral(1 as i32)),
                 Node::List(ListDetails {
                     head: Box::from(Node::Keyword(KeywordDetails {
                         token: Lexeme::Plus,
                     })),
                     rest: vec![
-                        Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)),
-                        Node::Constant(ConstantLiteral::IntegerLiteral(3 as i64)),
+                        Node::Constant(ConstantLiteral::IntegerLiteral(2 as i32)),
+                        Node::Constant(ConstantLiteral::IntegerLiteral(3 as i32)),
                     ],
                 }),
             ],
@@ -228,10 +231,10 @@ mod tests {
         let tree = Node::Map(vec![
             MapItem{
                 key: "guten".to_string(),
-                value: Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)), },
+                value: Node::Constant(ConstantLiteral::IntegerLiteral(1 as i32)), },
             MapItem{
                 key: "tag".to_string(),
-                value: Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)), },
+                value: Node::Constant(ConstantLiteral::IntegerLiteral(2 as i32)), },
         ]);
 
         assert_eq!(parser.parse(), Ok(tree))
@@ -243,8 +246,8 @@ mod tests {
         let mut parser = Parser::new(&text);
 
         let tree = Node::Vector(vec![
-        Node::Constant(ConstantLiteral::IntegerLiteral(1 as i64)),
-        Node::Constant(ConstantLiteral::IntegerLiteral(2 as i64)),
+        Node::Constant(ConstantLiteral::IntegerLiteral(1 as i32)),
+        Node::Constant(ConstantLiteral::IntegerLiteral(2 as i32)),
         ]);
 
         assert_eq!(parser.parse(), Ok(tree))

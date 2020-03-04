@@ -30,7 +30,7 @@ pub enum Lexeme {
 
     Identifier(String),
     StringLiteral(String),
-    NumberLiteral(i64),
+    NumberLiteral(i32),
 
     And,
     MapKey(String),
@@ -381,6 +381,6 @@ mod tests {
         let text = "123".to_string();
         let mut scanner = Scanner::new(&text);
 
-        assert_eq!(NumberLiteral(123 as i64), scanner.scan_token().unwrap().lexeme)
+        assert_eq!(NumberLiteral(123 as i32), scanner.scan_token().unwrap().lexeme)
     }
 }

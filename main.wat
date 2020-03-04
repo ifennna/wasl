@@ -1,10 +1,9 @@
 (module 
  (func $main 
- (result i64)
- (i64.add
- (i64.const 40)
- (i64.const 3)
+ (result i32)
+ (i32.const 1)
  )
- )
+ (memory $0 1)
+ (data (i32.const 1) "11Hello world")
  (export "_start" (func $main))
  )
