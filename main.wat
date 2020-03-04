@@ -1,9 +1,12 @@
 (module 
+ (import "wasi_unstable" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
+ (memory 1) (export "memory" (memory 0))
+ (data (i32.const 8) "Hello world\n")
  (func $main 
- (result i32)
- (i32.const 1)
+ (i32.store (i32.const 0) (i32.const 8))
+ (i32.store (i32.const 4) (i32.const 12))
+ (call $fd_write (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 20))
+ drop
  )
- (memory $0 1)
- (data (i32.const 1) "11Hello world")
  (export "_start" (func $main))
  )
