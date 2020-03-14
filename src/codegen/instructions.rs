@@ -1,35 +1,35 @@
-use std::fmt::{Display, Formatter, Error};
+use std::fmt::{Display, Error, Formatter};
 
 type ReferenceNumber = usize;
 
 /// Only operations on i32 numbers are supported at the moment
 pub enum Types {
     I32param(ReferenceNumber),
-    I32result
+    I32result,
 }
 
 pub struct OpData {
     pub location: Opcodes,
-    pub data: String
+    pub data: String,
 }
 
 #[derive(Copy, Clone)]
 pub enum Opcodes {
-    GetLocal, // Get a local variable from the stack
-    Add, // Add two i32 constants
-    Subtract, // Subtract two i32 constants
-    Load, // Load 4 bytes as an i32 from linear memory
+    GetLocal,        // Get a local variable from the stack
+    Add,             // Add two i32 constants
+    Subtract,        // Subtract two i32 constants
+    Load,            // Load 4 bytes as an i32 from linear memory
     Store(i32, i32), // Store 4 bytes as an i32 into linear memory
-    Const(i32), // Push a constant on the stack
-    Drop
+    Const(i32),      // Push a constant on the stack
+    Drop,
 }
 
 pub enum WASIImports {
-    FDWrite
+    FDWrite,
 }
 
 pub enum SysCalls {
-    Write(Opcodes, Opcodes, Opcodes, Opcodes)
+    Write(Opcodes, Opcodes, Opcodes, Opcodes),
 }
 
 impl Display for Types {
@@ -54,10 +54,14 @@ impl Display for Opcodes {
             Opcodes::Add => write!(f, "(i32.add"),
             Opcodes::Subtract => write!(f, "(i32.sub"),
             Opcodes::Load => write!(f, "(i32.load32_s)"),
-            Opcodes::Store(address, value) =>
-                write!(f, "(i32.store {} {})", Opcodes::Const(*address), Opcodes::Const(*value)),
+            Opcodes::Store(address, value) => write!(
+                f,
+                "(i32.store {} {})",
+                Opcodes::Const(*address),
+                Opcodes::Const(*value)
+            ),
             Opcodes::Const(constant) => write!(f, "(i32.const {:?})", constant),
-            Opcodes::Drop => write!(f, "drop")
+            Opcodes::Drop => write!(f, "drop"),
         }
     }
 }
@@ -65,8 +69,11 @@ impl Display for Opcodes {
 impl Display for SysCalls {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
-            SysCalls::Write(file_descriptor, iov_ptr, iov_len, num_written) =>
-                write!(f, "(call $fd_write {} {} {} {})", file_descriptor, iov_ptr, iov_len, num_written)
+            SysCalls::Write(file_descriptor, iov_ptr, iov_len, num_written) => write!(
+                f,
+                "(call $fd_write {} {} {} {})",
+                file_descriptor, iov_ptr, iov_len, num_written
+            ),
         }
     }
 }

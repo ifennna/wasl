@@ -23,13 +23,13 @@ pub struct ListDetails {
 pub struct FunctionDetails {
     pub name: Box<Node>,
     pub args: Vec<Node>,
-    pub body: Box<Node>,
+    pub body: Vec<Node>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct MainDetails {
     pub args: Vec<Node>,
-    pub body: Box<Node>,
+    pub body: Vec<Node>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,7 +41,7 @@ pub struct VariableInformation {
 #[derive(Debug, PartialEq)]
 pub struct MapItem {
     pub key: String,
-    pub value: Node
+    pub value: Node,
 }
 
 #[derive(Debug, PartialEq)]

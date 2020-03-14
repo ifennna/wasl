@@ -1,8 +1,8 @@
 use itertools::MultiPeek;
+use std::iter::Peekable;
 use std::str::Chars;
 use std::vec::IntoIter;
 use std::{error, fmt};
-use std::iter::Peekable;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Lexeme {
@@ -17,6 +17,7 @@ pub enum Lexeme {
     Minus,
     Plus,
     Colon,
+    SemiColon,
     Slash,
     Star,
     Bang,
@@ -98,7 +99,7 @@ fn is_digit(c: char) -> bool {
 }
 
 fn is_alpha(c: char) -> bool {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '-';
 }
 
 fn check_keyword(
@@ -114,7 +115,7 @@ fn check_keyword(
     Lexeme::Identifier(String::from(input_string))
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ScanError {
     UnknownCharacter(Position, String),
 }
@@ -165,7 +166,16 @@ impl<'a> Scanner<'a> {
                 } else {
                     self.make_map_key()
                 }
-            },
+            }
+            Some(';') => {
+                if self.peek_match(';') {
+                    let token = self.make_token(Lexeme::Comment);
+                    self.advance_until_newline();
+                    token
+                } else {
+                    self.make_token(Lexeme::SemiColon)
+                }
+            }
             Some(',') => self.make_token(Lexeme::Comma),
             Some('.') => self.make_token(Lexeme::Dot),
             Some('-') => self.make_token(Lexeme::Minus),
@@ -199,15 +209,7 @@ impl<'a> Scanner<'a> {
                     self.make_token(Lexeme::Less)
                 }
             }
-            Some('/') => {
-                if self.peek_match('/') {
-                    let token = self.make_token(Lexeme::Comment);
-                    self.advance_until_newline();
-                    token
-                } else {
-                    self.make_token(Lexeme::Slash)
-                }
-            }
+            Some('/') => self.make_token(Lexeme::Slash),
             Some('"') => self.make_string(),
             Some(c) if is_whitespace(c) => self.make_token(Lexeme::Whitespace),
             Some(c) if is_digit(c) => self.make_digit(),
@@ -363,8 +365,14 @@ pub fn scan_into_peekable(source: String) -> Result<Peekable<IntoIter<Token>>, S
             } => (),
             Token {
                 lexeme: Lexeme::EOF,
-                ..
-            } => break,
+                position: pos,
+            } => {
+                tokens.push(Token {
+                    position: pos,
+                    lexeme: Lexeme::EOF,
+                });
+                break;
+            }
             any => tokens.push(any),
         }
     }
@@ -381,6 +389,9 @@ mod tests {
         let text = "123".to_string();
         let mut scanner = Scanner::new(&text);
 
-        assert_eq!(NumberLiteral(123 as i32), scanner.scan_token().unwrap().lexeme)
+        assert_eq!(
+            NumberLiteral(123 as i32),
+            scanner.scan_token().unwrap().lexeme
+        )
     }
 }
